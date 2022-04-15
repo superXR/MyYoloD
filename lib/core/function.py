@@ -99,10 +99,11 @@ def train(cfg, train_loader, model, criterion, optimizer, scaler, epoch, num_bat
                       'Time {batch_time.val:.3f}s ({batch_time.avg:.3f}s)\t' \
                       'Speed {speed:.1f} samples/s\t' \
                       'Data {data_time.val:.3f}s ({data_time.avg:.3f}s)\t' \
-                      'Loss {loss.val:.5f} ({loss.avg:.5f})'.format(
+                      'Loss {loss.val:.5f} ({loss.avg:.5f})\t' \
+                      'Lr {lr:.5f}'.format(
                           epoch, i, len(train_loader), batch_time=batch_time,
                           speed=input.size(0)/batch_time.val,
-                          data_time=data_time, loss=losses)
+                          data_time=data_time, loss=losses, lr=optimizer.param_groups[0]['lr'])
                 logger.info(msg)
 
                 writer = writer_dict['writer']
