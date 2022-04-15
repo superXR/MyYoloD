@@ -72,7 +72,7 @@ class MultiHeadLoss(nn.Module):
         # Class label smoothing https://arxiv.org/pdf/1902.04103.pdf eqn 3
         cp, cn = smooth_BCE(eps=0.0)
 
-        BCEcls, BCEobj, BCEseg = self.losses
+        BCEcls, BCEobj, BCEseg_ll, BCEseg_da = self.losses
 
         # Calculate Losses
         nt = 0  # number of targets
@@ -100,7 +100,6 @@ class MultiHeadLoss(nn.Module):
                 tobj[b, a, gj, gi] = (1.0 - model.gr) + model.gr * iou.detach().clamp(0).type(tobj.dtype)  # iou ratio
 
                 # Classification
-                # print(model.nc)
                 if model.nc > 1:  # cls loss (only if multiple classes)
                     t = torch.full_like(ps[:, 5:], cn, device=device)  # targets
                     t[range(n), tcls[i]] = cp
@@ -109,11 +108,11 @@ class MultiHeadLoss(nn.Module):
 
         drive_area_seg_predicts = predictions[1].view(-1)
         drive_area_seg_targets = targets[1].view(-1)
-        lseg_da = BCEseg(drive_area_seg_predicts, drive_area_seg_targets)
+        lseg_da = BCEseg_da(drive_area_seg_predicts, drive_area_seg_targets)
 
         lane_line_seg_predicts = predictions[2].view(-1)
         lane_line_seg_targets = targets[2].view(-1)
-        lseg_ll = BCEseg(lane_line_seg_predicts, lane_line_seg_targets)
+        lseg_ll = BCEseg_ll(lane_line_seg_predicts, lane_line_seg_targets)
 
         metric = SegmentationMetric(2)
         nb, _, height, width = targets[1].shape
@@ -184,18 +183,26 @@ def get_loss(cfg, device):
     -loss: (MultiHeadLoss)
 
     """
-    # class loss criteria
-    BCEcls = nn.BCEWithLogitsLoss(pos_weight=torch.Tensor([cfg.LOSS.CLS_POS_WEIGHT])).to(device)
+    # single class
+    if cfg.det_num_class == 1:
+        # class loss criteria
+        BCEcls = nn.BCEWithLogitsLoss(pos_weight=torch.Tensor([cfg.LOSS.CLS_POS_WEIGHT])).to(device)
+    # multi class
+    else:
+        # class loss criteria  In fact, the pos_weight length is adaptive, so just focus on the weights
+        BCEcls = nn.BCEWithLogitsLoss(pos_weight=torch.ones([cfg.det_num_class])).to(device)
     # object loss criteria
     BCEobj = nn.BCEWithLogitsLoss(pos_weight=torch.Tensor([cfg.LOSS.OBJ_POS_WEIGHT])).to(device)
-    # segmentation loss criteria
-    BCEseg = nn.BCEWithLogitsLoss(pos_weight=torch.Tensor([cfg.LOSS.SEG_POS_WEIGHT])).to(device)
+    # lane line loss criteria
+    BCEseg_ll = nn.BCEWithLogitsLoss(pos_weight=torch.Tensor([cfg.LOSS.LANE_POS_WEIGHT])).to(device)
+    # driving area segmentation loss criteria
+    BCEseg_da = nn.BCEWithLogitsLoss(pos_weight=torch.Tensor([cfg.LOSS.DA_POS_WEIGHT])).to(device)
     # Focal loss
     gamma = cfg.LOSS.FL_GAMMA  # focal loss gamma
     if gamma > 0:
         BCEcls, BCEobj = FocalLoss(BCEcls, gamma), FocalLoss(BCEobj, gamma)
 
-    loss_list = [BCEcls, BCEobj, BCEseg]
+    loss_list = [BCEcls, BCEobj, BCEseg_ll, BCEseg_da]
     loss = MultiHeadLoss(loss_list, cfg=cfg, lambdas=cfg.LOSS.MULTI_HEAD_LAMBDA)
     return loss
 
