@@ -6,7 +6,7 @@ from yacs.config import CfgNode as CN
 _C = CN()
 
 _C.LOG_DIR = 'runs/'
-_C.GPUS = [0,1]     
+_C.GPUS = [0,1,2]     
 _C.WORKERS = 8
 _C.PIN_MEMORY = False
 _C.PRINT_FREQ = 20
@@ -14,7 +14,7 @@ _C.AUTO_RESUME = False       # Resume from the last training interrupt
 _C.NEED_AUTOANCHOR = True      # Re-select the prior anchor(k-means)    When training from scratch (epoch=0), set it to be ture!
 _C.DEBUG = False
 _C.num_seg_class = 2
-# Change the number of detect class, go to modify nc(YOLOP.py-508 and 480), nc(function.py-153) and single_class(bdd.py)
+_C.det_num_class = 10 # Change the number of detect class, go to modify nc(YOLOP.py-509 and 481), nc(function.py-153) and single_class(bdd.py)
 
 # Cudnn      params
 _C.CUDNN = CN()
@@ -38,12 +38,14 @@ _C.MODEL.EXTRA = CN(new_allowed=True)
 _C.LOSS = CN(new_allowed=True)
 _C.LOSS.LOSS_NAME = ''
 _C.LOSS.MULTI_HEAD_LAMBDA = None
-_C.LOSS.FL_GAMMA = 0.0  # focal loss gamma
+_C.LOSS.FL_GAMMA = 1.5  # focal loss gamma
 _C.LOSS.CLS_POS_WEIGHT = 1.0  # classification loss positive weights
 _C.LOSS.OBJ_POS_WEIGHT = 1.0  # object loss positive weights
-_C.LOSS.SEG_POS_WEIGHT = 1.0  # segmentation loss positive weights
+# _C.LOSS.SEG_POS_WEIGHT = 1.0  # segmentation loss positive weights
+_C.LOSS.LANE_POS_WEIGHT = 1.2  # lane line loss positive weights
+_C.LOSS.DA_POS_WEIGHT = 1.3  # driving area segmentation loss positive weights
 _C.LOSS.BOX_GAIN = 0.05  # box loss gain
-_C.LOSS.CLS_GAIN = 0.5  # classification loss gain
+_C.LOSS.CLS_GAIN = 0.5 # 0.5  # classification loss gain
 _C.LOSS.OBJ_GAIN = 1.0  # object loss gain
 _C.LOSS.DA_SEG_GAIN = 0.2  # driving area segmentation loss gain
 _C.LOSS.LL_SEG_GAIN = 0.2  # lane line segmentation loss gain
@@ -52,10 +54,10 @@ _C.LOSS.LL_IOU_GAIN = 0.2 # lane line iou loss gain
 
 # DATASET related params
 _C.DATASET = CN(new_allowed=True)
-_C.DATASET.DATAROOT = '/mnt/sdb/dpai3/data/bdd100k/images'       # the path of images folder
-_C.DATASET.LABELROOT = '/mnt/sdb/dpai3/data/bdd100k/det_annotations'      # the path of det_annotations folder
-_C.DATASET.MASKROOT = '/mnt/sdb/dpai3/data/bdd100k/da_seg_annotations/bdd_seg_gt'                # the path of da_seg_annotations folder
-_C.DATASET.LANEROOT = '/mnt/sdb/dpai3/data/bdd100k/ll_seg_annotations/bdd_lane_gt'               # the path of ll_seg_annotations folder
+_C.DATASET.DATAROOT = '/mnt/sdb/dpai3/data/bdd100k/images' #'/mnt/sdb/dpai3/data/TestOnTraining/images'    # the path of images folder
+_C.DATASET.LABELROOT = '/mnt/sdb/dpai3/data/bdd100k/det_annotations' #  '/mnt/sdb/dpai3/data/TestOnTraining/det_annotations'   # the path of det_annotations folder
+_C.DATASET.MASKROOT = '/mnt/sdb/dpai3/data/bdd100k/da_seg_annotations/bdd_seg_gt'  #  '/mnt/sdb/dpai3/data/TestOnTraining/da_seg_annotations'     # the path of da_seg_annotations folder
+_C.DATASET.LANEROOT =  '/mnt/sdb/dpai3/data/bdd100k/ll_seg_annotations/bdd_lane_gt' # '/mnt/sdb/dpai3/data/TestOnTraining/ll_seg_annotations'      # the path of ll_seg_annotations folder
 _C.DATASET.DATASET = 'BddDataset'
 _C.DATASET.TRAIN_SET = 'train'
 _C.DATASET.TEST_SET = 'val'
@@ -79,9 +81,9 @@ _C.DATASET.HSV_V = 0.4  # image HSV-Value augmentation (fraction)
 # train
 _C.TRAIN = CN(new_allowed=True)
 _C.TRAIN.LR0 = 0.001  # initial learning rate (SGD=1E-2, Adam=1E-3)
-_C.TRAIN.LRF = 0.2  # final OneCycleLR learning rate (lr0 * lrf)
-_C.TRAIN.WARMUP_EPOCHS = 3.0
-_C.TRAIN.WARMUP_BIASE_LR = 0.1
+_C.TRAIN.LRF = 0.05  # 0.2 final OneCycleLR learning rate (lr0 * lrf)
+_C.TRAIN.WARMUP_EPOCHS = 13 # 3.0
+_C.TRAIN.WARMUP_BIASE_LR = 0.025 # 0.1
 _C.TRAIN.WARMUP_MOMENTUM = 0.8
 
 _C.TRAIN.OPTIMIZER = 'adam'
@@ -92,10 +94,10 @@ _C.TRAIN.GAMMA1 = 0.99
 _C.TRAIN.GAMMA2 = 0.0
 
 _C.TRAIN.BEGIN_EPOCH = 0
-_C.TRAIN.END_EPOCH = 240
+_C.TRAIN.END_EPOCH = 200
 
 _C.TRAIN.VAL_FREQ = 1
-_C.TRAIN.BATCH_SIZE_PER_GPU = 24
+_C.TRAIN.BATCH_SIZE_PER_GPU = 4  # 24
 _C.TRAIN.SHUFFLE = True
 
 _C.TRAIN.IOU_THRESHOLD = 0.2
@@ -122,7 +124,7 @@ _C.TRAIN.PLOT = True                #
 
 # testing
 _C.TEST = CN(new_allowed=True)
-_C.TEST.BATCH_SIZE_PER_GPU = 24
+_C.TEST.BATCH_SIZE_PER_GPU = 4  # 24
 _C.TEST.MODEL_FILE = ''
 _C.TEST.SAVE_JSON = False
 _C.TEST.SAVE_TXT = False
@@ -141,11 +143,11 @@ def update_config(cfg, args):
     if args.logDir:
         cfg.LOG_DIR = args.logDir
     
-    # if args.conf_thres:
-    #     cfg.TEST.NMS_CONF_THRESHOLD = args.conf_thres
+    if args.conf_thres:
+        cfg.TEST.NMS_CONF_THRESHOLD = args.conf_thres
 
-    # if args.iou_thres:
-    #     cfg.TEST.NMS_IOU_THRESHOLD = args.iou_thres
+    if args.iou_thres:
+        cfg.TEST.NMS_IOU_THRESHOLD = args.iou_thres
     
 
 

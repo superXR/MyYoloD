@@ -27,6 +27,7 @@ from lib.core.loss import get_loss
 from lib.core.function import train
 from lib.core.function import validate
 from lib.core.general import fitness
+from lib.models import get_tf_net
 from lib.models import get_net
 from lib.utils import is_parallel
 from lib.utils.utils import get_optimizer
@@ -112,7 +113,7 @@ def main():
         GPU_nums = 1
     else:
         GPU_nums = len(cfg.GPUS)
-    device = select_device(logger, batch_size=cfg.TRAIN.BATCH_SIZE_PER_GPU* GPU_nums) if not cfg.DEBUG \
+    device = select_device(logger, batch_size=cfg.TRAIN.BATCH_SIZE_PER_GPU* GPU_nums, GPU_nums=GPU_nums) if not cfg.DEBUG \
         else select_device(logger, 'cpu')
 
     if args.local_rank != -1:
@@ -122,7 +123,7 @@ def main():
         dist.init_process_group(backend='nccl', init_method='env://')  # distributed backend
     
     print("load model to device")
-    model = get_net(cfg).to(device)
+    model = get_tf_net(cfg).to(device)
     # print("load finished")
     # model = model.to(device)
     # print("finish build model")
@@ -139,10 +140,10 @@ def main():
     last_epoch = -1
     perf_indicator = 0.0
 
-    Encoder_para_idx = [str(i) for i in range(0, 17)]
-    Det_Head_para_idx = [str(i) for i in range(17, 25)]
-    Da_Seg_Head_para_idx = [str(i) for i in range(25, 34)]
-    Ll_Seg_Head_para_idx = [str(i) for i in range(34,43)]
+    Encoder_para_idx = [str(i) for i in range(0, 26)]
+    Det_Head_para_idx = [str(i) for i in range(26, 34)]
+    Da_Seg_Head_para_idx = [str(i) for i in range(34, 43)]
+    Ll_Seg_Head_para_idx = [str(i) for i in range(43,52)]
 
     lf = lambda x: ((1 + math.cos(x * math.pi / cfg.TRAIN.END_EPOCH)) / 2) * \
                    (1 - cfg.TRAIN.LRF) + cfg.TRAIN.LRF  # cosine
@@ -263,7 +264,7 @@ def main():
 
     # assign model params
     model.gr = 1.0
-    model.nc = 1
+    model.nc = cfg.det_num_class
     # print('bulid model finished')
 
     print("begin to load data")
@@ -346,7 +347,7 @@ def main():
                 final_output_dir, tb_log_dir, writer_dict,
                 logger, device, rank
             )
-            fi = fitness(np.array(detect_results).reshape(1, -1))  #目标检测评价指标
+            # fi = fitness(np.array(detect_results).reshape(1, -1))  #目标检测评价指标
 
             msg = 'Epoch: [{0}]    Loss({loss:.3f})\n' \
                       'Driving area Segment: Acc({da_seg_acc:.3f})    IOU ({da_seg_iou:.3f})    mIOU({da_seg_miou:.3f})\n' \
@@ -359,7 +360,7 @@ def main():
                           t_inf=times[0], t_nms=times[1])
             logger.info(msg)
 
-            perf_indicator = 0.5 * detect_results[2] + 0.25 * detect_results[0] + 0.25 * detect_results[1]
+            perf_indicator = 0.2 * (detect_results[2] + detect_results[0] + detect_results[1]) + 0.6 * (ll_segment_results[0] + ll_segment_results[1]) + 0.4 * da_segment_results[2]
             if perf_indicator >= best_perf:
                 best_perf = perf_indicator
                 best_model = True

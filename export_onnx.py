@@ -7,10 +7,13 @@ from lib.utils import initialize_weights
 import argparse
 import onnx
 import onnxruntime as ort
-import onnxsim
+# import onnxsim
 
 import math
 import cv2
+import os
+import sys
+from lib.models import YOLOP_TF
 
 # The lane line and the driving area segment branches without share information with each other and without link
 YOLOP = [
@@ -41,7 +44,7 @@ YOLOP = [
     [[-1, 10], Concat, [1]],  # 22
     [-1, BottleneckCSP, [512, 512, 1, False]],  # 23
     [[17, 20, 23], Detect,
-     [1, [[3, 9, 5, 11, 4, 20], [7, 18, 6, 39, 12, 31], [19, 50, 38, 81, 68, 157]], [128, 256, 512]]],
+     [10, [[3, 9, 5, 11, 4, 20], [7, 18, 6, 39, 12, 31], [19, 50, 38, 81, 68, 157]], [128, 256, 512]]],
     # Detection head 24: from_(features from specific layers), block, nc(num_classes) anchors ch(channels)
 
     [16, Conv, [256, 128, 3, 1]],  # 25
@@ -70,7 +73,7 @@ class MCnet(nn.Module):
     def __init__(self, block_cfg):
         super(MCnet, self).__init__()
         layers, save = [], []
-        self.nc = 1  # traffic or not
+        self.nc = 10  # traffic or not
         self.detector_index = -1
         self.det_out_idx = block_cfg[0][0]
         self.seg_out_idx = block_cfg[0][1:]
@@ -147,26 +150,35 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument('--height', type=int, default=640)  # height
     parser.add_argument('--width', type=int, default=640)  # width
+    parser.add_argument('--pth_path', type=str, default='/mnt/sdb/dpai3/project/YOLOP/tools/runs/BddDataset/v4.2_2022-03-27-15-33/model_best.pth') # checkpoint pth
+    parser.add_argument('--onnx_dir', type=str, default='/mnt/sdb/dpai3/project/YOLOP/weights')  # onnx out dir
     args = parser.parse_args()
 
-    do_simplify = True
+    do_simplify = False
 
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
-    model = MCnet(YOLOP)
-    checkpoint = torch.load('./weights/End-to-end.pth', map_location=device)
+    model = MCnet(YOLOP_TF)
+    checkpoint = torch.load(args.pth_path, map_location=device)
     model.load_state_dict(checkpoint['state_dict'])
     model.eval()
 
     height = args.height
     width = args.width
-    print("Load ./weights/End-to-end.pth done!")
-    onnx_path = f'./weights/yolop-{height}-{width}.onnx'
+    print("Load {} done!".format(args.pth_path))
+    onnx_path = os.path.join(args.onnx_dir, f'yolop-{height}-{width}-v4.2.onnx')
     inputs = torch.randn(1, 3, height, width)
 
     print(f"Converting to {onnx_path}")
-    torch.onnx.export(model, inputs, onnx_path,
-                      verbose=False, opset_version=12, input_names=['images'],
-                      output_names=['det_out', 'drive_area_seg', 'lane_line_seg'])
+    try:
+        torch.onnx.export(model, inputs, onnx_path,
+                        verbose=False, opset_version=12, input_names=['images'],
+                        operator_export_type=torch.onnx.OperatorExportTypes.ONNX_ATEN_FALLBACK,
+                        output_names=['det_out', 'drive_area_seg', 'lane_line_seg'])
+    except:
+        e_type, e_value, e_traceback = sys.exc_info()
+        print( "type ==> %s" % (e_type.__name__))
+        print( "value: %s" %(e_value))
+        print( "traceback: %s" %(e_traceback))
     print('convert', onnx_path, 'to onnx finish!!!')
     # Checks
     model_onnx = onnx.load(onnx_path)  # load onnx model

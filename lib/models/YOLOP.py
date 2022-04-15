@@ -1,3 +1,4 @@
+from time import time
 import torch
 from torch import tensor
 import torch.nn as nn
@@ -463,13 +464,13 @@ YOLOP = [
 [ -1, Conv, [256, 512, 3, 2]],  #7
 [ -1, SPP, [512, 512, [5, 9, 13]]],     #8
 [ -1, BottleneckCSP, [512, 512, 1, False]],     #9
-[ -1, Conv,[512, 256, 1, 1]],   #10
+[ -1, Conv,[512, 256, 1, 1]],   #10 nchw [1, 256, 20, 20]
 [ -1, Upsample, [None, 2, 'nearest']],  #11
 [ [-1, 6], Concat, [1]],    #12
 [ -1, BottleneckCSP, [512, 256, 1, False]], #13
-[ -1, Conv, [256, 128, 1, 1]],  #14
+[ -1, Conv, [256, 128, 1, 1]],  #14  nchw [1, 128, 40, 40]
 [ -1, Upsample, [None, 2, 'nearest']],  #15
-[ [-1,4], Concat, [1]],     #16         #Encoder
+[ [-1,4], Concat, [1]],     #16         #Encoder  nchw [1, 256, 80, 80]
 
 [ -1, BottleneckCSP, [256, 128, 1, False]],     #17
 [ -1, Conv, [128, 128, 3, 2]],      #18
@@ -550,6 +551,7 @@ class MCnet(nn.Module):
         det_out = None
         Da_fmap = []
         LL_fmap = []
+        neck_fmap = []
         for i, block in enumerate(self.model):
             if block.from_ != -1:
                 x = cache[block.from_] if isinstance(block.from_, int) else [x if j == -1 else cache[j] for j in block.from_]       #calculate concat detect
@@ -559,8 +561,12 @@ class MCnet(nn.Module):
                 out.append(m(x))
             if i == self.detector_index:
                 det_out = x
+            # if i < 11:
+            #     # neck_fmap.append(x)
+            #     print(str(i) + ' shape:', x.shape)
             cache.append(x if block.index in self.save else None)
         out.insert(0,det_out)
+        # out.append(neck_fmap)
         return out
             
     
@@ -582,17 +588,22 @@ def get_net(cfg, **kwargs):
 
 
 if __name__ == "__main__":
-    from torch.utils.tensorboard import SummaryWriter
+    # from torch.utils.tensorboard import SummaryWriter
     model = get_net(False)
-    input_ = torch.randn((1, 3, 256, 256))
-    gt_ = torch.rand((1, 2, 256, 256))
-    metric = SegmentationMetric(2)
+    input_ = torch.randn((1, 3, 640, 640))
+    # gt_ = torch.rand((1, 2, 256, 256))
+    # metric = SegmentationMetric(2)
+    t1 = time()
     model_out,Da_fmap, LL_fmap = model(input_)
+    t2 = time()
+    print('infer time:', t2 - t1)
     detects, dring_area_seg, lane_line_seg = model_out
-    # Da_fmap, LL_fmap = SAD_out
-    for det in detects:
+    print('detect shape:')
+    for det in model_out:
         print(det.shape)
-    print(detects.shape)
-    print(dring_area_seg.shape)
-    print(lane_line_seg.shape)
+    print('Da_fmap shape:', Da_fmap.shape)
+    print('LL_fmap shape:', LL_fmap.shape)
+    # print('neck_index 1-10 shape:')
+    # for neck in neck_fmap:
+    #     print(neck.shape)
  

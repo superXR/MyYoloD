@@ -9,6 +9,7 @@ LastEditTime: 2021-12-14 11:17:32
 import os
 import sys
 from tqdm import tqdm
+from random import random
 
 
 img_fdir = 'D:\StudyFiles\project\Graduation_design\data\TestOnTraining\images'
@@ -45,6 +46,9 @@ def cpdata(mode):
         os.system(cp)
         cp = 'copy {} {}'.format(ll_seg_path, ll_seg_anno_dir)
         os.system(cp)
+
+def select_img(path):
+    img_list = os.listdir(path)
 
 
 if __name__ == '__main__':

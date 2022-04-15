@@ -47,7 +47,7 @@ YOLOP = [
     [[-1, 10], Concat, [1]],  # 22
     [-1, BottleneckCSP, [512, 512, 1, False]],  # 23
     [[17, 20, 23], Detect,
-     [1, [[3, 9, 5, 11, 4, 20], [7, 18, 6, 39, 12, 31], [19, 50, 38, 81, 68, 157]], [128, 256, 512]]],
+     [10, [[3, 9, 5, 11, 4, 20], [7, 18, 6, 39, 12, 31], [19, 50, 38, 81, 68, 157]], [128, 256, 512]]],
     # Detection head 24: from_(features from specific layers), block, nc(num_classes) anchors ch(channels)
 
     # [16, Conv, [256, 128, 3, 1]],  # 25
@@ -76,7 +76,7 @@ class MCnet(nn.Module):
     def __init__(self, block_cfg):
         super(MCnet, self).__init__()
         layers, save = [], []
-        self.nc = 1  # traffic or not
+        self.nc = 10  # traffic or not
         self.detector_index = -1
         self.det_out_idx = block_cfg[0][0]
         self.seg_out_idx = block_cfg[0][1:]
@@ -153,18 +153,18 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument('--height', type=int, default=640)  # height
     parser.add_argument('--width', type=int, default=640)  # width
-    parser.add_argument('--pth_path', type=str, default='/mnt/sdb/dpai3/project/YOLOP/weights/End-to-end.pth') # checkpoint pth
+    parser.add_argument('--pth_path', type=str, default='/mnt/sdb/dpai3/project/YOLOP/tools/runs/BddDataset/_2022-02-15-00-56/model_best.pth') # checkpoint pth
     parser.add_argument('--onnx_dir', type=str, default='/mnt/sdb/dpai3/project/YOLOP/weights')  # onnx out dir
     args = parser.parse_args()
 
     do_simplify = False
 
-    device = 'cuda' if torch.cuda.is_available() else 'cpu'
+    device = 'cuda:2' if torch.cuda.is_available() else 'cpu'
     model = MCnet(YOLOP)
     checkpoint_path = args.pth_path
     checkpoint = torch.load(checkpoint_path, map_location=device)
     
-    # edit checkpoint
+    # edit checkpoint, remove drivable area segmentation
     state_dict = checkpoint['state_dict']
     new_state_dict = collections.OrderedDict()
     for k in state_dict.keys():
@@ -182,7 +182,7 @@ if __name__ == "__main__":
     width = args.width
     print("Load " + checkpoint_path + " done!")
     onnx_dir = args.onnx_dir
-    onnx_path = onnx_dir + f'/yolop-{height}-{width}-det-ll-120.onnx'
+    onnx_path = onnx_dir + f'/yolop-{height}-{width}-det-ll-v2.0.onnx'
     inputs = torch.randn(1, 3, height, width)
 
     print(f"Converting to {onnx_path}")

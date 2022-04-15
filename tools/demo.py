@@ -21,7 +21,7 @@ import PIL.Image as image
 from lib.config import cfg
 from lib.config import update_config
 from lib.utils.utils import create_logger, select_device, time_synchronized
-from lib.models import get_net
+from lib.models import get_net, get_tf_net
 from lib.dataset import LoadImages, LoadStreams
 from lib.core.general import non_max_suppression, scale_coords
 from lib.utils import plot_one_box,show_seg_result
@@ -37,22 +37,35 @@ transform=transforms.Compose([
             normalize,
         ])
 
+label_map = {
+    0:"person",
+    1:"rider",
+    2:"car",
+    3:"bus",
+    4:"truck",
+    5:"bike",
+    6:"motor",
+    7:"traffic_light",
+    8:"traffic_sign",
+    9:"train"
+}
 
 def detect(cfg,opt):
 
-    logger, _, _ = create_logger(
-        cfg, cfg.LOG_DIR, 'demo')
+    # logger, _, _ = create_logger(
+    #     cfg, cfg.LOG_DIR, 'demo')
 
-    device = select_device(logger,opt.device)
+    device = select_device(device=opt.device)
     if os.path.exists(opt.save_dir):  # output dir
         shutil.rmtree(opt.save_dir)  # delete dir
     os.makedirs(opt.save_dir)  # make new dir
-    half = device.type != 'cpu'  # half precision only supported on CUDA
+    half = device.type != 'cpu' and opt.half # half precision only supported on CUDA
 
     # Load model
-    model = get_net(cfg)
+    model = get_tf_net(cfg)
     checkpoint = torch.load(opt.weights, map_location= device)
     model.load_state_dict(checkpoint['state_dict'])
+    # model.load_state_dict(checkpoint)
     model = model.to(device)
     if half:
         model.half()  # to FP16
@@ -90,7 +103,7 @@ def detect(cfg,opt):
             img = img.unsqueeze(0)
         # Inference
         t1 = time_synchronized()
-        det_out, da_seg_out,ll_seg_out= model(img)
+        det_out, da_seg_out, ll_seg_out= model(img)
         t2 = time_synchronized()
         # if i == 0:
         #     print(det_out)
@@ -104,6 +117,7 @@ def detect(cfg,opt):
 
         nms_time.update(t4-t3,img.size(0))
         det=det_pred[0]
+        # print('det_pred:', det_pred)
 
         save_path = str(opt.save_dir +'/'+ Path(path).name) if dataset.mode != 'stream' else str(opt.save_dir + '/' + "web.mp4")
 
@@ -118,7 +132,7 @@ def detect(cfg,opt):
         da_seg_mask = torch.nn.functional.interpolate(da_predict, scale_factor=int(1/ratio), mode='bilinear')
         _, da_seg_mask = torch.max(da_seg_mask, 1)
         da_seg_mask = da_seg_mask.int().squeeze().cpu().numpy()
-        # da_seg_mask = morphological_process(da_seg_mask, kernel_size=7)
+        da_seg_mask = morphological_process(da_seg_mask, kernel_size=7)
 
         
         ll_predict = ll_seg_out[:, :,pad_h:(height-pad_h),pad_w:(width-pad_w)]
@@ -127,15 +141,19 @@ def detect(cfg,opt):
         ll_seg_mask = ll_seg_mask.int().squeeze().cpu().numpy()
         ll_seg_mask = morphological_process(ll_seg_mask, kernel_size=7, func_type=cv2.MORPH_OPEN)
         ll_seg_mask = connect_lane(ll_seg_mask)
-
-        img_det = show_seg_result(img_det, (da_seg_mask, ll_seg_mask), _, _, is_demo=True)
+        
+        det_img = img_det.copy()
+        img_det, da_img, ll_img = show_seg_result(img_det, (da_seg_mask, ll_seg_mask), _, _, is_demo=True,respective=True)
+        # cv2.imwrite(save_path, ll_img)
+        # continue
 
         if len(det):
             det[:,:4] = scale_coords(img.shape[2:],det[:,:4],img_det.shape).round()
             for *xyxy,conf,cls in reversed(det):
-                label_det_pred = f'{names[int(cls)]} {conf:.2f}'
+                label_det_pred = f'{label_map[int(cls)]} {conf:.2f}'
                 plot_one_box(xyxy, img_det , label=label_det_pred, color=colors[int(cls)], line_thickness=2)
-        
+                # plot_one_box(xyxy, det_img , label=label_det_pred, color=colors[int(cls)], line_thickness=2)
+                # cv2.imwrite(save_path, det_img)
         if dataset.mode == 'images':
             cv2.imwrite(save_path,img_det)
 
@@ -164,15 +182,16 @@ def detect(cfg,opt):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument('--weights', nargs='+', type=str, default='D:\StudyFiles\project\Graduation_design\YOLOP\weights\End-to-end.pth', help='model.pth path(s)')
-    parser.add_argument('--source', type=str, default='..\inference\images', help='source')  # file/folder   ex:inference/images
+    parser.add_argument('--weights', nargs='+', type=str, default='/mnt/sdb/dpai3/project/YOLOP/tools/runs/BddDataset/v4.2_2022-03-27-15-33/model_best.pth', help='model.pth path(s)')
+    parser.add_argument('--source', type=str, default='/mnt/sdb/dpai3/project/YOLOP/inference/paper_img/tren', help='source')  # file/folder   ex:inference/images
     parser.add_argument('--img_size', type=int, default=640, help='inference size (pixels)')
     parser.add_argument('--conf_thres', type=float, default=0.25, help='object confidence threshold')
     parser.add_argument('--iou_thres', type=float, default=0.45, help='IOU threshold for NMS')
     parser.add_argument('--device', default='0', help='cuda device, i.e. 0 or 0,1,2,3 or cpu')
-    parser.add_argument('--save_dir', type=str, default='..\inference\output', help='directory to save results')
+    parser.add_argument('--save_dir', type=str, default='/mnt/sdb/dpai3/project/YOLOP/inference/paper_out/tren', help='directory to save results')
     parser.add_argument('--augment', action='store_true', help='augmented inference')
     parser.add_argument('--update', action='store_true', help='update all models')
+    parser.add_argument('--half', type=bool, default=False, help='half: to FP16')
     opt = parser.parse_args()
     with torch.no_grad():
         detect(cfg,opt)

@@ -49,7 +49,7 @@ def create_logger(cfg, cfg_path, phase='train', rank=-1):
         return None, None, None
 
 
-def select_device(logger=None, device='', batch_size=None):
+def select_device(logger=None, device='', batch_size=None, GPU_nums=3):
     # device = 'cpu' or '0' or '0,1,2,3'
     cpu_request = device.lower() == 'cpu'
     if device and not cpu_request:  # if device requested other than 'cpu'
@@ -60,6 +60,7 @@ def select_device(logger=None, device='', batch_size=None):
     if cuda:
         c = 1024 ** 2  # bytes to MB
         ng = torch.cuda.device_count()
+        # ng = GPU_nums
         if ng > 1 and batch_size:  # check that batch_size is compatible with device_count
             assert batch_size % ng == 0, 'batch-size %g not multiple of GPU count %g' % (batch_size, ng)
         x = [torch.cuda.get_device_properties(i) for i in range(ng)]
@@ -112,7 +113,7 @@ def save_checkpoint(epoch, name, model, optimizer, output_dir, filename, is_best
     if epoch % 10 == 0 or filename == 'checkpoint.pth':
         torch.save(checkpoint, os.path.join(output_dir, filename))
     if is_best and 'state_dict' in checkpoint:
-        torch.save(checkpoint['state_dict'],
+        torch.save(checkpoint,
                    os.path.join(output_dir, 'model_best.pth'))
 
 

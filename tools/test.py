@@ -21,7 +21,7 @@ from lib.config import update_config
 from lib.core.loss import get_loss
 from lib.core.function import validate
 from lib.core.general import fitness
-from lib.models import get_net
+from lib.models import get_net,get_tf_net
 from lib.utils.utils import create_logger, select_device
 
 def parse_args():
@@ -35,9 +35,9 @@ def parse_args():
     parser.add_argument('--logDir',
                         help='log directory',
                         type=str,
-                        default='runs/')
-    parser.add_argument('--weights', nargs='+', type=str, default='/data2/zwt/wd/YOLOP/runs/BddDataset/detect_and_segbranch_whole/epoch-169.pth', help='model.pth path(s)')
-    parser.add_argument('--conf_thres', type=float, default=0.001, help='object confidence threshold')
+                        default='runs/TestOnVal')
+    parser.add_argument('--weights', nargs='+', type=str, default='/mnt/sdb/dpai3/project/YOLOP/tools/runs/BddDataset/v2.0_2022-02-15-00-56/model_best.pth', help='model.pth path(s)')
+    parser.add_argument('--conf_thres', type=float, default=0.25, help='object confidence threshold')
     parser.add_argument('--iou_thres', type=float, default=0.6, help='IOU threshold for NMS')
     args = parser.parse_args()
 
@@ -92,7 +92,7 @@ def main():
 
     model = model.to(device)
     model.gr = 1.0
-    model.nc = 1
+    model.nc = 10
     print('bulid model finished')
 
     print("begin to load data")

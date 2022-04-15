@@ -41,12 +41,9 @@ label_map = {
     4:"truck",
     5:"bike",
     6:"motor",
-    7:"tl_green",
-    8:"tl_red",
-    9:"tl_yellow",
-    10:"tl_none",
-    11:"traffic sign",
-    12:"train"
+    7:"traffic_light",
+    8:"traffic_sign",
+    9:"train"
 }
 
 def data_process(img):
@@ -236,7 +233,7 @@ def detect(opt):
     # Load model
     ort.set_default_logger_severity(4)
     # onnx_path = f"./weights/{weight}"
-    ort_session = ort.InferenceSession(opt.weight)
+    ort_session = ort.InferenceSession(opt.weight, providers=['CPUExecutionProvider'])
     print(f"Load {opt.weight} done!")
     print(type(ort_session))
     # set gpu device
@@ -266,9 +263,9 @@ def detect(opt):
     inf_time = AverageMeter()
     nms_time = AverageMeter()
     
-    device = torch.device('cuda:0')
+    # device = torch.device('cuda:2')
     for index, (path, img, img_det, vid_cap,shapes) in tqdm(enumerate(dataset),total = len(dataset)):
-        time_img = transform(img).to(device)
+        # time_img = transform(img).to(device)
         img_bgr = img_det
         height, width, _ = img_bgr.shape
         # convert to RGB
@@ -289,19 +286,19 @@ def detect(opt):
 
         img = np.expand_dims(img, 0)  # (1, 3,640,640)
         # Inference
-        t1 = time_synchronized()
+        # t1 = time_synchronized()
         # inference: (1,n,6) (1,2,640,640)
         det_out, ll_seg_out = ort_session.run(
             ['det_out', 'lane_line_seg'],
             input_feed={"images": img}
         )
-        t2 = time_synchronized()
-        inf_time.update(t2-t1,time_img.size(0))
+        # t2 = time_synchronized()
+        # inf_time.update(t2-t1,time_img.size(0))
         det_out = torch.from_numpy(det_out).float()
-        t3 = time_synchronized()
+        # t3 = time_synchronized()
         boxes = non_max_suppression(det_out)[0]  # [n,6] [x1,y1,x2,y2,conf,cls]
-        t4 = time_synchronized()
-        nms_time.update(t4-t3,time_img.size(0))
+        # t4 = time_synchronized()
+        # nms_time.update(t4-t3,time_img.size(0))
         boxes = boxes.cpu().numpy().astype(np.float32)
 
         if boxes.shape[0] == 0:
@@ -346,7 +343,7 @@ def detect(opt):
             x1, y1, x2, y2, conf, label = boxes[i]
             x1, y1, x2, y2, label = int(x1), int(y1), int(x2), int(y2), int(label)
             img_merge = cv2.rectangle(img_merge, (x1, y1), (x2, y2), (0, 255, 0), 2, 2)
-            # img_merge = cv2.putText(img_merge, label_map[i], (x1, y1), fontFace=cv2.FONT_HERSHEY_SIMPLEX, fontScale=1, color=(0, 0, 255), thickness=2)
+            img_merge = cv2.putText(img_merge, label_map[label], (x1, y1), fontFace=cv2.FONT_HERSHEY_SIMPLEX, fontScale=1, color=(0, 0, 255), thickness=2)
 
         # da: resize to original size
         # da_seg_mask = da_seg_mask * 255
@@ -384,12 +381,12 @@ def detect(opt):
 
     print('Results saved to %s' % Path(opt.save_dir))
     print('Done. (%.3fs)' % (time.time() - t0))
-    print('inf : (%.4fs/frame)   nms : (%.4fs/frame)' % (inf_time.avg,nms_time.avg))
+    # print('inf : (%.4fs/frame)   nms : (%.4fs/frame)' % (inf_time.avg,nms_time.avg))
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument('--weight', type=str, default="/mnt/sdb/dpai3/project/YOLOP/weights/yolop-640-640-det-ll-120.onnx")
+    parser.add_argument('--weight', type=str, default="/mnt/sdb/dpai3/project/YOLOP/weights/yolop-640-640-det-ll-v2.0.onnx")
     parser.add_argument('--img', type=str, default="/mnt/sdb/dpai3/project/YOLOP/inference/images/adb4871d-4d063244.jpg")
     parser.add_argument('--conf_thres', type=float, default=0.25, help='object confidence threshold')
     parser.add_argument('--iou_thres', type=float, default=0.45, help='IOU threshold for NMS')
